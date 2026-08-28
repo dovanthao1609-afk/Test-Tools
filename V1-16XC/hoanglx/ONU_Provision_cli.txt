@@ -1,0 +1,18 @@
+enable
+configure terminal
+interface gpon 0/3
+no onu 10
+onu add 10 ZNTS05165c66 auto-learning
+onu-profile 10 VEIP_test
+olt vp 101 vlan-flow 200 c-vid 200 mapping-onu 10 gemport 1/1
+olt vp 102 vlan-flow 2211 c-vid 2211 mapping-onu 10 gemport 2/1
+olt vp 103 vlan-flow 35 c-vid 35 mapping-onu 10 gemport 3/1
+olt vp 104 vlan-flow 1234 c-vid 1234 mapping-onu 10 gemport 4/1
+olt vp 105 vlan-flow 1237 c-vid 1237 mapping-onu 10 gemport 5/1
+olt vp 106 vlan-flow 30 c-vid 30 mapping-onu 10 gemport 6/1
+onu voip-sip 10 phone-number pots 1 1019
+onu voip-sip 10 auth pots 1 user 1019 password 1019
+onu voip-sip 10 phone-number pots 2 1017
+onu voip-sip 10 auth pots 2 user 1017 password 1017
+end
+write

@@ -1,0 +1,214 @@
+!###########Remove XGS ONT
+no xpongemtcont gemports gemport xgspon0/3_onu007_gem1_1
+no xpongemtcont tconts tcont xgspon0/3_onu007_tcont1_1
+commit
+no forwarding forwarders forwarder fwd.vlan200.cli.attach ports port fwd_xgspon0/3_onu007_o_venet1_1_c0200_any
+no interfaces interface xgspon0/3_onu007_o_venet1_1_c0200_any
+no interfaces interface xgspon0/3_onu007_veip_1_c0200_any
+commit
+no forwarding forwarders forwarder fwd.vlan35.cli.attach ports port fwd_xgspon0/3_onu007_o_venet1_1_c0035_any
+no interfaces interface xgspon0/3_onu007_o_venet1_1_c0035_any
+no interfaces interface xgspon0/3_onu007_veip_1_c0035_any
+commit
+no forwarding forwarders forwarder fwd.vlan2211.cli.attach ports port fwd_xgspon0/3_onu007_o_venet1_1_c2211_any
+no interfaces interface xgspon0/3_onu007_o_venet1_1_c2211_any
+no interfaces interface xgspon0/3_onu007_veip_1_c2211_any
+commit
+no forwarding forwarders forwarder fwd.vlan1234.cli.attach ports port fwd_xgspon0/3_onu007_o_venet1_1_c1234_any
+no interfaces interface xgspon0/3_onu007_o_venet1_1_c1234_any
+no interfaces interface xgspon0/3_onu007_veip_1_c1234_any
+commit
+no interfaces interface xgspon0/3_onu007_venet1_1
+interfaces interface xgspon0/3_onu007_ani1_1 hardware-component
+no link-table link-table xgspon0/3_onu007_ani1_1
+no link-table link-table xgspon0/3_onu007_veip_1
+no interfaces interface xgspon0/3_onu007_vani1_1
+no interfaces interface xgspon0/3_onu007_veip_1
+no interfaces interface xgspon0/3_onu007_ani1_1 hardware-component
+no interfaces interface xgspon0/3_onu007_ani1_1
+commit
+no hardware component xgspon0/3_onu007_aniport1_1
+no hardware component xgspon0/3_onu007_sfp1_1
+no hardware component xgspon0/3_onu007_cage1_1
+no hardware component xgspon0/3_onu007_card1
+no hardware component xgspon0/3_onu007
+commit
+!###########Remove GPON ONT
+no xpongemtcont gemports gemport gpon0/3_onu007_gem1_1
+no xpongemtcont tconts tcont gpon0/3_onu007_tcont1_1
+commit
+no xpongemtcont tconts tcont gpon0/3_onu007_tcont1_2 
+no xpongemtcont gemports gemport gpon0/3_onu007_gem1_2 
+commit
+no xpongemtcont tconts tcont gpon0/3_onu007_tcont1_3 
+no xpongemtcont gemports gemport gpon0/3_onu007_gem1_3 
+commit
+no xpongemtcont tconts tcont gpon0/3_onu007_tcont1_4 
+no xpongemtcont gemports gemport gpon0/3_onu007_gem1_4 
+commit
+no forwarding forwarders forwarder fwd.vlan2211.cli.attach ports port fwd_gpon0/3_onu007_o_venet1_1_c2211_any
+no interfaces interface gpon0/3_onu007_o_venet1_1_c2211_any
+no interfaces interface gpon0/3_onu007_veip_1_c2211_any
+commit
+no forwarding forwarders forwarder fwd.vlan35.cli.attach ports port fwd_gpon0/3_onu007_o_venet1_1_c0035_any
+no interfaces interface gpon0/3_onu007_o_venet1_1_c0035_any
+no interfaces interface gpon0/3_onu007_veip_1_c0035_any
+commit
+no forwarding forwarders forwarder fwd.vlan200.cli.attach ports port fwd_gpon0/3_onu007_o_venet1_1_c0200_any
+no interfaces interface gpon0/3_onu007_o_venet1_1_c0200_any
+no interfaces interface gpon0/3_onu007_veip_1_c0200_any
+commit
+no forwarding forwarders forwarder fwd.vlan1234.cli.attach ports port fwd_gpon0/3_onu007_o_venet1_1_c1234_any
+no interfaces interface gpon0/3_onu007_o_venet1_1_c1234_any
+no interfaces interface gpon0/3_onu007_veip_1_c1234_any
+commit
+no interfaces interface gpon0/3_onu007_venet1_1
+no interfaces interface gpon0/3_onu007_ani1_1 hardware-component
+no link-table link-table gpon0/3_onu007_ani1_1
+no link-table link-table gpon0/3_onu007_veip_1
+no interfaces interface gpon0/3_onu007_vani1_1
+no interfaces interface gpon0/3_onu007_veip_1
+no interfaces interface gpon0/3_onu007_ani1_1 hardware-component
+no interfaces interface gpon0/3_onu007_ani1_1
+commit
+no hardware component gpon0/3_onu007_aniport1_1
+no hardware component gpon0/3_onu007_sfp1_1
+no hardware component gpon0/3_onu007_cage1_1
+no hardware component gpon0/3_onu007_card1
+no hardware component gpon0/3_onu007
+commit
+!##############XGS ONT
+hardware component xgspon0/3_onu007 class chassis parent-rel-pos 1
+hardware component xgspon0/3_onu007_card1 class board parent xgspon0/3_onu007
+hardware component xgspon0/3_onu007_cage1_1 class cage parent xgspon0/3_onu007_card1
+hardware component xgspon0/3_onu007_sfp1_1 class transceiver parent xgspon0/3_onu007_cage1_1
+hardware component xgspon0/3_onu007_aniport1_1 class transceiver-link parent xgspon0/3_onu007_sfp1_1
+commit
+interfaces interface xgspon0/3_onu007_ani1_1 type ani enabled hardware-component port-layer-if xgspon0/3_onu007_aniport1_1
+interfaces interface xgspon0/3_onu007_ani1_1 ani upstream-fec true management-gemport-aes-indicator false onu-id 7
+interfaces interface xgspon0/3_onu007_vani1_1 type v-ani v-ani onu-id 7 channel-partition CG_03_xgs.CPart expected-serial-number ZNTS05160dce preferred-channel-pair CG_03_xgs.CPart.CPair upstream-fec true
+link-table link-table xgspon0/3_onu007_ani1_1 to-interface xgspon0/3_onu007_vani1_1
+commit
+interfaces interface xgspon0/3_onu007_veip_1 type onu-v-vrefpoint onu-v-vrefpoint related-onu xgspon0/3_onu007_ani1_1
+interfaces interface xgspon0/3_onu007_veip_1 enabled
+commit
+interfaces interface xgspon0/3_onu007_venet1_1 type olt-v-enet olt-v-enet lower-layer-interface xgspon0/3_onu007_vani1_1
+link-table link-table xgspon0/3_onu007_veip_1 to-interface xgspon0/3_onu007_venet1_1
+commit
+interfaces interface xgspon0/3_onu007_veip_1_c0200_any type vlan-sub-interface subif-lower-layer interface xgspon0/3_onu007_veip_1
+interfaces interface xgspon0/3_onu007_veip_1_c0200_any enabled
+interfaces interface xgspon0/3_onu007_veip_1_c0200_any inline-frame-processing ingress-rule rule rule_1 priority 100 flexible-match match-criteria tag 0 dot1q-tag tag-type c-vlan vlan-id 200 pbit any dei any
+commit
+interfaces interface xgspon0/3_onu007_veip_1_c0035_any type vlan-sub-interface subif-lower-layer interface xgspon0/3_onu007_veip_1
+interfaces interface xgspon0/3_onu007_veip_1_c0035_any enabled
+interfaces interface xgspon0/3_onu007_veip_1_c0035_any inline-frame-processing ingress-rule rule rule_1 priority 100 flexible-match match-criteria tag 0 dot1q-tag tag-type c-vlan vlan-id 35 pbit any dei any
+commit
+interfaces interface xgspon0/3_onu007_veip_1_c2211_any type vlan-sub-interface subif-lower-layer interface xgspon0/3_onu007_veip_1
+interfaces interface xgspon0/3_onu007_veip_1_c2211_any enabled
+interfaces interface xgspon0/3_onu007_veip_1_c2211_any inline-frame-processing ingress-rule rule rule_1 priority 100 flexible-match match-criteria tag 0 dot1q-tag tag-type c-vlan vlan-id 2211 pbit any dei any
+commit
+interfaces interface xgspon0/3_onu007_veip_1_c1234_any type vlan-sub-interface subif-lower-layer interface xgspon0/3_onu007_veip_1
+interfaces interface xgspon0/3_onu007_veip_1_c1234_any enabled
+interfaces interface xgspon0/3_onu007_veip_1_c1234_any inline-frame-processing ingress-rule rule rule_1 priority 100 flexible-match match-criteria tag 0 dot1q-tag tag-type c-vlan vlan-id 1234 pbit any dei any
+commit
+interfaces interface xgspon0/3_onu007_o_venet1_1_c0200_any type vlan-sub-interface subif-lower-layer interface xgspon0/3_onu007_venet1_1
+interfaces interface xgspon0/3_onu007_o_venet1_1_c0200_any enabled
+interfaces interface xgspon0/3_onu007_o_venet1_1_c0200_any inline-frame-processing ingress-rule rule rule_1 priority 100 flexible-match match-criteria tag 0 dot1q-tag tag-type c-vlan vlan-id 200 pbit any dei any
+forwarding forwarders forwarder fwd.vlan200.cli.attach ports port fwd_xgspon0/3_onu007_o_venet1_1_c0200_any sub-interface xgspon0/3_onu007_o_venet1_1_c0200_any
+commit
+interfaces interface xgspon0/3_onu007_o_venet1_1_c0035_any type vlan-sub-interface subif-lower-layer interface xgspon0/3_onu007_venet1_1
+interfaces interface xgspon0/3_onu007_o_venet1_1_c0035_any enabled
+interfaces interface xgspon0/3_onu007_o_venet1_1_c0035_any inline-frame-processing ingress-rule rule rule_1 priority 100 flexible-match match-criteria tag 0 dot1q-tag tag-type c-vlan vlan-id 35 pbit any dei any
+forwarding forwarders forwarder fwd.vlan35.cli.attach ports port fwd_xgspon0/3_onu007_o_venet1_1_c0035_any sub-interface xgspon0/3_onu007_o_venet1_1_c0035_any
+commit
+interfaces interface xgspon0/3_onu007_o_venet1_1_c2211_any type vlan-sub-interface subif-lower-layer interface xgspon0/3_onu007_venet1_1
+interfaces interface xgspon0/3_onu007_o_venet1_1_c2211_any enabled
+interfaces interface xgspon0/3_onu007_o_venet1_1_c2211_any inline-frame-processing ingress-rule rule rule_1 priority 100 flexible-match match-criteria tag 0 dot1q-tag tag-type c-vlan vlan-id 2211 pbit any dei any
+forwarding forwarders forwarder fwd.vlan2211.cli.attach ports port fwd_xgspon0/3_onu007_o_venet1_1_c2211_any sub-interface xgspon0/3_onu007_o_venet1_1_c2211_any
+commit
+interfaces interface xgspon0/3_onu007_o_venet1_1_c1234_any type vlan-sub-interface subif-lower-layer interface xgspon0/3_onu007_venet1_1
+interfaces interface xgspon0/3_onu007_o_venet1_1_c1234_any enabled
+interfaces interface xgspon0/3_onu007_o_venet1_1_c1234_any inline-frame-processing ingress-rule rule rule_1 priority 100 flexible-match match-criteria tag 0 dot1q-tag tag-type c-vlan vlan-id 1234 pbit any dei any
+forwarding forwarders forwarder fwd.vlan1234.cli.attach ports port fwd_xgspon0/3_onu007_o_venet1_1_c1234_any sub-interface xgspon0/3_onu007_o_venet1_1_c1234_any
+commit
+xpongemtcont tconts tcont xgspon0/3_onu007_tcont1_1 alloc-id 1032 interface-reference xgspon0/3_onu007_vani1_1 traffic-descriptor-profile-ref 10G_Type5
+xpongemtcont gemports gemport xgspon0/3_onu007_gem1_1 interface xgspon0/3_onu007_venet1_1 tcont-ref xgspon0/3_onu007_tcont1_1 gemport-id 1032
+commit
+exit
+hardware component xgspon0/3_onu007 reset reset-type hardware-reset
+interfaces interface xgspon0/3_onu007_o_venet1_1_c0200_any l2-dhcpv4-relay enable true trusted-port false profile-ref TEST
+interfaces interface xgspon0/3_onu007_o_venet1_1_c2211_any l2-dhcpv4-relay enable true trusted-port false profile-ref TEST
+interfaces interface xgspon0/3_onu007_o_venet1_1_c0035_any pppoe enable true profile-ref TEST
+commit
+exit
+!##############GPON ONT
+hardware component gpon0/3_onu007 class chassis parent-rel-pos 1
+hardware component gpon0/3_onu007_card1 class board parent gpon0/3_onu007
+hardware component gpon0/3_onu007_cage1_1 class cage parent gpon0/3_onu007_card1
+hardware component gpon0/3_onu007_sfp1_1 class transceiver parent gpon0/3_onu007_cage1_1
+hardware component gpon0/3_onu007_aniport1_1 class transceiver-link parent gpon0/3_onu007_sfp1_1
+commit
+interfaces interface gpon0/3_onu007_ani1_1 type ani enabled hardware-component port-layer-if gpon0/3_onu007_aniport1_1
+interfaces interface gpon0/3_onu007_ani1_1 ani upstream-fec true management-gemport-aes-indicator false onu-id 7
+interfaces interface gpon0/3_onu007_vani1_1 type v-ani v-ani onu-id 7 channel-partition CG_03_gpon.CPart expected-serial-number ZNTS05165c6c preferred-channel-pair CG_03_gpon.CPart.CPair upstream-fec true
+link-table link-table gpon0/3_onu007_ani1_1 to-interface gpon0/3_onu007_vani1_1
+commit
+interfaces interface gpon0/3_onu007_veip_1 type onu-v-vrefpoint onu-v-vrefpoint related-onu gpon0/3_onu007_ani1_1
+interfaces interface gpon0/3_onu007_veip_1 enabled
+commit
+interfaces interface gpon0/3_onu007_venet1_1 type olt-v-enet olt-v-enet lower-layer-interface gpon0/3_onu007_vani1_1
+link-table link-table gpon0/3_onu007_veip_1 to-interface gpon0/3_onu007_venet1_1
+commit
+interfaces interface gpon0/3_onu007_veip_1_c2211_any type vlan-sub-interface subif-lower-layer interface gpon0/3_onu007_veip_1
+interfaces interface gpon0/3_onu007_veip_1_c2211_any enabled
+interfaces interface gpon0/3_onu007_veip_1_c2211_any inline-frame-processing ingress-rule rule rule_1 priority 100 flexible-match match-criteria tag 0 dot1q-tag tag-type c-vlan vlan-id 2211 pbit any dei any
+commit
+interfaces interface gpon0/3_onu007_veip_1_c0035_any type vlan-sub-interface subif-lower-layer interface gpon0/3_onu007_veip_1
+interfaces interface gpon0/3_onu007_veip_1_c0035_any enabled
+interfaces interface gpon0/3_onu007_veip_1_c0035_any inline-frame-processing ingress-rule rule rule_1 priority 100 flexible-match match-criteria tag 0 dot1q-tag tag-type c-vlan vlan-id 35 pbit any dei any
+commit
+interfaces interface gpon0/3_onu007_veip_1_c0200_any type vlan-sub-interface subif-lower-layer interface gpon0/3_onu007_veip_1
+interfaces interface gpon0/3_onu007_veip_1_c0200_any enabled
+interfaces interface gpon0/3_onu007_veip_1_c0200_any inline-frame-processing ingress-rule rule rule_1 priority 100 flexible-match match-criteria tag 0 dot1q-tag tag-type c-vlan vlan-id 200 pbit any dei any
+commit
+interfaces interface gpon0/3_onu007_veip_1_c1234_any type vlan-sub-interface subif-lower-layer interface gpon0/3_onu007_veip_1
+interfaces interface gpon0/3_onu007_veip_1_c1234_any enabled
+interfaces interface gpon0/3_onu007_veip_1_c1234_any inline-frame-processing ingress-rule rule rule_1 priority 100 flexible-match match-criteria tag 0 dot1q-tag tag-type c-vlan vlan-id 1234 pbit any dei any
+commit
+interfaces interface gpon0/3_onu007_o_venet1_1_c2211_any type vlan-sub-interface subif-lower-layer interface gpon0/3_onu007_venet1_1
+interfaces interface gpon0/3_onu007_o_venet1_1_c2211_any enabled
+interfaces interface gpon0/3_onu007_o_venet1_1_c2211_any inline-frame-processing ingress-rule rule rule_1 priority 100 flexible-match match-criteria tag 0 dot1q-tag tag-type c-vlan vlan-id 2211 pbit any dei any
+forwarding forwarders forwarder fwd.vlan2211.cli.attach ports port fwd_gpon0/3_onu007_o_venet1_1_c2211_any sub-interface gpon0/3_onu007_o_venet1_1_c2211_any
+commit
+interfaces interface gpon0/3_onu007_o_venet1_1_c0035_any type vlan-sub-interface subif-lower-layer interface gpon0/3_onu007_venet1_1
+interfaces interface gpon0/3_onu007_o_venet1_1_c0035_any enabled
+interfaces interface gpon0/3_onu007_o_venet1_1_c0035_any inline-frame-processing ingress-rule rule rule_1 priority 100 flexible-match match-criteria tag 0 dot1q-tag tag-type c-vlan vlan-id 35 pbit any dei any
+forwarding forwarders forwarder fwd.vlan35.cli.attach ports port fwd_gpon0/3_onu007_o_venet1_1_c0035_any sub-interface gpon0/3_onu007_o_venet1_1_c0035_any
+commit
+interfaces interface gpon0/3_onu007_o_venet1_1_c0200_any type vlan-sub-interface subif-lower-layer interface gpon0/3_onu007_venet1_1
+interfaces interface gpon0/3_onu007_o_venet1_1_c0200_any enabled
+interfaces interface gpon0/3_onu007_o_venet1_1_c0200_any inline-frame-processing ingress-rule rule rule_1 priority 100 flexible-match match-criteria tag 0 dot1q-tag tag-type c-vlan vlan-id 200 pbit any dei any
+forwarding forwarders forwarder fwd.vlan200.cli.attach ports port fwd_gpon0/3_onu007_o_venet1_1_c0200_any sub-interface gpon0/3_onu007_o_venet1_1_c0200_any
+commit
+interfaces interface gpon0/3_onu007_o_venet1_1_c1234_any type vlan-sub-interface subif-lower-layer interface gpon0/3_onu007_venet1_1
+interfaces interface gpon0/3_onu007_o_venet1_1_c1234_any enabled
+interfaces interface gpon0/3_onu007_o_venet1_1_c1234_any inline-frame-processing ingress-rule rule rule_1 priority 100 flexible-match match-criteria tag 0 dot1q-tag tag-type c-vlan vlan-id 1234 pbit any dei any
+forwarding forwarders forwarder fwd.vlan1234.cli.attach ports port fwd_gpon0/3_onu007_o_venet1_1_c1234_any sub-interface gpon0/3_onu007_o_venet1_1_c1234_any
+commit
+xpongemtcont tconts tcont gpon0/3_onu007_tcont1_1 alloc-id 129 interface-reference gpon0/3_onu007_vani1_1 traffic-descriptor-profile-ref 1G_Type5
+xpongemtcont gemports gemport gpon0/3_onu007_gem1_1 interface gpon0/3_onu007_o_venet1_1_c2211_any tcont-ref gpon0/3_onu007_tcont1_1 gemport-id 129
+commit
+xpongemtcont tconts tcont gpon0/3_onu007_tcont1_2 alloc-id 130 interface-reference gpon0/3_onu007_vani1_1 traffic-descriptor-profile-ref 1G_Type5
+xpongemtcont gemports gemport gpon0/3_onu007_gem1_2 interface gpon0/3_onu007_o_venet1_1_c0035_any tcont-ref gpon0/3_onu007_tcont1_2 gemport-id 130
+commit
+xpongemtcont tconts tcont gpon0/3_onu007_tcont1_3 alloc-id 131 interface-reference gpon0/3_onu007_vani1_1 traffic-descriptor-profile-ref 1G_Type5
+xpongemtcont gemports gemport gpon0/3_onu007_gem1_3 interface gpon0/3_onu007_o_venet1_1_c0200_any tcont-ref gpon0/3_onu007_tcont1_3 gemport-id 131
+commit
+xpongemtcont tconts tcont gpon0/3_onu007_tcont1_4 alloc-id 132 interface-reference gpon0/3_onu007_vani1_1 traffic-descriptor-profile-ref 1G_Type5
+xpongemtcont gemports gemport gpon0/3_onu007_gem1_4 interface gpon0/3_onu007_o_venet1_1_c1234_any tcont-ref gpon0/3_onu007_tcont1_4 gemport-id 132
+commit
+hardware component gpon0/3_onu007 reset reset-type hardware-reset
+interfaces interface gpon0/3_onu007_o_venet1_1_c0200_any l2-dhcpv4-relay enable true trusted-port false profile-ref TEST
+interfaces interface gpon0/3_onu007_o_venet1_1_c2211_any l2-dhcpv4-relay enable true trusted-port false profile-ref TEST
+interfaces interface gpon0/3_onu007_o_venet1_1_c0035_any pppoe enable true profile-ref TEST
+commit
