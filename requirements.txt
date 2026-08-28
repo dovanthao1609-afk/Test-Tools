@@ -1,0 +1,5 @@
+scapy
+ncclient
+lxml
+paramiko
+Pillow

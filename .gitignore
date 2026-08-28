@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pcap
+*.log
+*_backup*.py
+*_backup*.html
+.venv/
+venv/
+env/
+*.tmp
+*.bak
+.vscode/
+.idea/
