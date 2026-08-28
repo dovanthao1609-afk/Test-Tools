@@ -1,0 +1,79 @@
+!###########XGS ONT
+no xpongemtcont gemports gemport xgspon0/3_onu007_gem1_1
+no xpongemtcont tconts tcont xgspon0/3_onu007_tcont1_1
+commit
+no forwarding forwarders forwarder fwd.vlan200.cli.attach ports port fwd_xgspon0/3_onu007_o_venet1_1_c0200_any
+no interfaces interface xgspon0/3_onu007_o_venet1_1_c0200_any
+no interfaces interface xgspon0/3_onu007_veip_1_c0200_any
+commit
+no forwarding forwarders forwarder fwd.vlan35.cli.attach ports port fwd_xgspon0/3_onu007_o_venet1_1_c0035_any
+no interfaces interface xgspon0/3_onu007_o_venet1_1_c0035_any
+no interfaces interface xgspon0/3_onu007_veip_1_c0035_any
+commit
+no forwarding forwarders forwarder fwd.vlan2211.cli.attach ports port fwd_xgspon0/3_onu007_o_venet1_1_c2211_any
+no interfaces interface xgspon0/3_onu007_o_venet1_1_c2211_any
+no interfaces interface xgspon0/3_onu007_veip_1_c2211_any
+commit
+no forwarding forwarders forwarder fwd.vlan1234.cli.attach ports port fwd_xgspon0/3_onu007_o_venet1_1_c1234_any
+no interfaces interface xgspon0/3_onu007_o_venet1_1_c1234_any
+no interfaces interface xgspon0/3_onu007_veip_1_c1234_any
+commit
+no interfaces interface xgspon0/3_onu007_venet1_1
+interfaces interface xgspon0/3_onu007_ani1_1 hardware-component
+no link-table link-table xgspon0/3_onu007_ani1_1
+no link-table link-table xgspon0/3_onu007_veip_1
+no interfaces interface xgspon0/3_onu007_vani1_1
+no interfaces interface xgspon0/3_onu007_veip_1
+no interfaces interface xgspon0/3_onu007_ani1_1 hardware-component
+no interfaces interface xgspon0/3_onu007_ani1_1
+commit
+no hardware component xgspon0/3_onu007_aniport1_1
+no hardware component xgspon0/3_onu007_sfp1_1
+no hardware component xgspon0/3_onu007_cage1_1
+no hardware component xgspon0/3_onu007_card1
+no hardware component xgspon0/3_onu007
+commit
+!###########GPON ONT
+no xpongemtcont gemports gemport gpon0/3_onu007_gem1_1
+no xpongemtcont tconts tcont gpon0/3_onu007_tcont1_1
+commit
+no xpongemtcont tconts tcont gpon0/3_onu007_tcont1_2 
+no xpongemtcont gemports gemport gpon0/3_onu007_gem1_2 
+commit
+no xpongemtcont tconts tcont gpon0/3_onu007_tcont1_3 
+no xpongemtcont gemports gemport gpon0/3_onu007_gem1_3 
+commit
+no xpongemtcont tconts tcont gpon0/3_onu007_tcont1_4 
+no xpongemtcont gemports gemport gpon0/3_onu007_gem1_4 
+commit
+no forwarding forwarders forwarder fwd.vlan2211.cli.attach ports port fwd_gpon0/3_onu007_o_venet1_1_c2211_any
+no interfaces interface gpon0/3_onu007_o_venet1_1_c2211_any
+no interfaces interface gpon0/3_onu007_veip_1_c2211_any
+commit
+no forwarding forwarders forwarder fwd.vlan35.cli.attach ports port fwd_gpon0/3_onu007_o_venet1_1_c0035_any
+no interfaces interface gpon0/3_onu007_o_venet1_1_c0035_any
+no interfaces interface gpon0/3_onu007_veip_1_c0035_any
+commit
+no forwarding forwarders forwarder fwd.vlan200.cli.attach ports port fwd_gpon0/3_onu007_o_venet1_1_c0200_any
+no interfaces interface gpon0/3_onu007_o_venet1_1_c0200_any
+no interfaces interface gpon0/3_onu007_veip_1_c0200_any
+commit
+no forwarding forwarders forwarder fwd.vlan1234.cli.attach ports port fwd_gpon0/3_onu007_o_venet1_1_c1234_any
+no interfaces interface gpon0/3_onu007_o_venet1_1_c1234_any
+no interfaces interface gpon0/3_onu007_veip_1_c1234_any
+commit
+no interfaces interface gpon0/3_onu007_venet1_1
+no interfaces interface gpon0/3_onu007_ani1_1 hardware-component
+no link-table link-table gpon0/3_onu007_ani1_1
+no link-table link-table gpon0/3_onu007_veip_1
+no interfaces interface gpon0/3_onu007_vani1_1
+no interfaces interface gpon0/3_onu007_veip_1
+no interfaces interface gpon0/3_onu007_ani1_1 hardware-component
+no interfaces interface gpon0/3_onu007_ani1_1
+commit
+no hardware component gpon0/3_onu007_aniport1_1
+no hardware component gpon0/3_onu007_sfp1_1
+no hardware component gpon0/3_onu007_cage1_1
+no hardware component gpon0/3_onu007_card1
+no hardware component gpon0/3_onu007
+commit
