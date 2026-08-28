@@ -8,7 +8,7 @@ from ping_check import *
 # ==================================================
 # OLT INFO
 # ==================================================
-LOOP_COUNT = 1
+LOOP_COUNT = 200
 TIMESTAMP    = datetime.now().strftime("%Y%m%d_%H%M%S")
 LOG_FILE     = f"terminal_log_{TIMESTAMP}.txt"
 RESULT_FILE  = f"result_{TIMESTAMP}.txt"
@@ -20,7 +20,7 @@ OLT_PORT = 23
 OLT_USERNAME = "admin"
 OLT_PASSWORD = r"Zhone1234%^&"
 
-ONU_KEYWORD = "onu004"
+ONU_KEYWORD = "onu010"
 ONU_USERNAME   = "admin"
 ONU_PASSWORD   = "dzsi"
 DEV_PASS     = "g4GwshWN"
@@ -164,10 +164,12 @@ def verify_provision(loop):
     time.sleep(1)
     send_olt_cmd(tn, "terminal length 0", 1)
     time.sleep(1)
+    send_olt_cmd(tn, f"show onu firmware version gpon 0/3 10",wait=3)
     out_mac    = send_olt_cmd(tn, f"show mac address-table",wait=3)
     out_pppoe  = send_olt_cmd(tn, f"show pppoe session all",wait=3)
     out_ipv6   = send_olt_cmd(tn, f"show ipv6 dhcp snooping binding",wait=3)
     out_ipdhcp = send_olt_cmd(tn, f"show ip dhcp snooping binding ", wait=3)
+
     tn.close()
 
     print(f"\n[LOOP {loop}] === VERIFY PROVISION ===")
@@ -219,9 +221,9 @@ def main():
         try:
             # ── 1. PROVISION ────────────────────────────────────
             print("\n[STEP] Run PROVISION commands via CLI")
-            OLT_CLI("ONU_Provision_cli.txt")
+            OLT_CLI("ONU_Provision_cli_shutport.txt")
             print("[WAIT] before checking connectivity from ZNID to Uplink")
-            time.sleep(120)
+            time.sleep(90)
 
             # ── 2. PING Check ────────────────────────────────────
             print("[STEP] Run PING checks")
@@ -231,10 +233,17 @@ def main():
             # xgs_onu_ipv4_vlan200 = get_ONU_IP(XGS_ID)
             ping_onu(gpon_onu_ipv4_vlan200, HOST1)
             # ping_onu(xgs_onu_ipv4_vlan200, HOST2)
-            voip_passed = bool(gpon_onu_ipv4_vlan200) and all(
-                check_voip_status(onu_ip)["ok"]
-                for onu_ip in gpon_onu_ipv4_vlan200
-            )
+            voip_passed = bool(gpon_onu_ipv4_vlan200)
+            if not voip_passed:
+                write_log("[VOIP] FAIL - không lấy được IP ONU vlan 200")
+            for onu_ip in gpon_onu_ipv4_vlan200:
+                voip_res = check_voip_status(onu_ip)
+                voip_passed = voip_passed and voip_res["ok"]
+                detail = ", ".join(
+                    f"Line {n}={s['registration_status'] or 'Unknown'}"
+                    for n, s in voip_res["lines"].items()
+                ) or voip_res.get("error", "no line parsed")
+                write_log(f"[VOIP] {'PASS' if voip_res['ok'] else 'FAIL'} - {onu_ip}: {detail}")
             # check_voip_status(xgs_onu_ipv4_vlan200)            
 
             # ── 2. VERIFY PROVISION ──────────────────────────
