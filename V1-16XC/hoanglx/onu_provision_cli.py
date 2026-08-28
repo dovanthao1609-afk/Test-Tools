@@ -135,10 +135,6 @@ def ping_onu(onu_ipv4_vlan200, HOSTS):
         ping_znid_check(ip, HOSTS)
 
 def check_targets(output, targets, label, expect_present=True):
-    """
-    expect_present=True  → PASS nếu target TÌM THẤY   (dùng sau PROVISION)
-    expect_present=False → PASS nếu target KHÔNG TỒN TẠI (dùng sau REMOVE)
-    """
     results  = []
     all_pass = True
 
@@ -233,7 +229,7 @@ def main():
             XGS_ID="xgspon0/3"
             gpon_onu_ipv4_vlan200 = get_ONU_IP(GPON_ID)
             # xgs_onu_ipv4_vlan200 = get_ONU_IP(XGS_ID)
-            ping_onu(gpon_onu_ipv4_vlan200, HOST2)
+            ping_onu(gpon_onu_ipv4_vlan200, HOST1)
             # ping_onu(xgs_onu_ipv4_vlan200, HOST2)
             voip_passed = bool(gpon_onu_ipv4_vlan200) and all(
                 check_voip_status(onu_ip)["ok"]

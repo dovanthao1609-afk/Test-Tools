@@ -105,7 +105,6 @@ def check_voip_status(onu_ip: str) -> dict:
         time.sleep(1)
         tn.read_very_eager()
 
-        send(tn, "config")
         time.sleep(1)
         tn.read_very_eager()
 
