@@ -1,0 +1,9 @@
+enable
+configure terminal f
+configure terminal
+interface gpon 0/3
+shutdown
+
+no shutdown
+end
+write
