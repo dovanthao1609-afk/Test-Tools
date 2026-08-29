@@ -4,16 +4,21 @@ import telnetlib
 import time
 import re
 import sys
+import os
 from datetime import datetime
+
+LOG_DIR = "D:/aging_log"
+os.makedirs(LOG_DIR, exist_ok=True)
 
 TELNET_PORT  = 23
 LOGIN_USER   = "admin"
 LOGIN_PASS   = "dzsi"
 ENABLE_PASS  = "development"
 DEV_PASS     = "g4GwshWN"
-PING_COUNT   = 10
+PING_COUNT   = 5
 TIMEOUT      = 10
 PING_TIMEOUT = 30
+VOIP_OK_STATES = {"up", "registered"}
 
 GREEN  = "\033[92m"
 RED    = "\033[91m"
@@ -25,6 +30,11 @@ RESET  = "\033[0m"
 def log(msg, color=""):
     ts = datetime.now().strftime("%H:%M:%S")
     print(f"{color}[{ts}] {msg}{RESET}")
+
+
+def get_log_path(file_name: str) -> str:
+    return os.path.join(LOG_DIR, file_name)
+
 
 def send(tn, cmd, delay=1):
     tn.write(cmd.encode("ascii") + b"\n")
@@ -54,6 +64,128 @@ def parse_ping(output):
         return {"sent": PING_COUNT, "received": recv, "lost": PING_COUNT - recv, "loss_pct": loss}
 
     return None
+
+
+def read_until_any(tn, patterns, timeout):
+    """Đọc tới khi thấy 1 trong các pattern. Trả về (buffer, pattern khớp hoặc None)."""
+    buf = ""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            chunk = tn.read_very_eager().decode("ascii", errors="replace")
+        except EOFError:
+            break
+        if chunk:
+            buf += chunk
+            for p in patterns:
+                if p in buf:
+                    return buf, p
+        time.sleep(0.2)
+    return buf, None
+
+
+def onu_login_enable(tn):
+    """Login ONU và vào enable mode.
+
+    'enable' trên Helix KHÔNG hỏi password, nên chỉ gửi ENABLE_PASS khi
+    thực sự thấy prompt 'Password:'. Nếu gửi mù, ENABLE_PASS bị chạy như
+    một lệnh CLI ('development') và lệnh kế tiếp bị nuốt làm password.
+    """
+    read_until(tn, "login:", timeout=15)
+    send(tn, LOGIN_USER, delay=0.5)
+    read_until(tn, "Password:", timeout=10)
+    send(tn, LOGIN_PASS, delay=0.5)
+    read_until_any(tn, [">", "#"], timeout=10)
+
+    send(tn, "enable", delay=0.5)
+    _, hit = read_until_any(tn, ["Password:", "#"], timeout=5)
+    if hit == "Password:":
+        send(tn, ENABLE_PASS, delay=0.5)
+        read_until_any(tn, ["#"], timeout=10)
+
+
+def run_onu_cmd(tn, cmd, prompt="#", timeout=30, quiet=1.5):
+    """Gửi lệnh và đọc tới khi prompt quay lại (thay vì 1 lần read_very_eager)."""
+    send(tn, cmd, delay=0.3)
+    out = ""
+    last_data = time.time()
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            chunk = tn.read_very_eager().decode("ascii", errors="replace")
+        except EOFError:
+            break
+        if chunk:
+            out += chunk
+            last_data = time.time()
+        elif out.rstrip().endswith(prompt) and (time.time() - last_data) > quiet:
+            break
+        time.sleep(0.2)
+    return out
+
+
+def parse_voip_status(output: str) -> dict:
+    lines = {}
+    current_line = None
+
+    for raw_line in output.splitlines():
+        line_match = re.match(r"\s*Line\s+(\d+)\s*:", raw_line, re.IGNORECASE)
+        if line_match:
+            current_line = line_match.group(1)
+            lines[current_line] = {"registration_status": None}
+            continue
+
+        if current_line is None:
+            continue
+
+        status_match = re.match(
+            r"\s*Registration Status\s*:\s*(\S+)",
+            raw_line,
+            re.IGNORECASE,
+        )
+        if status_match:
+            lines[current_line]["registration_status"] = status_match.group(1)
+
+    for line in lines.values():
+        status = (line["registration_status"] or "").lower()
+        line["ok"] = status in VOIP_OK_STATES
+
+    return {
+        "lines": lines,
+        "ok": bool(lines) and all(line["ok"] for line in lines.values()),
+    }
+
+
+def check_voip_status(onu_ip: str) -> dict:
+    log(f"Telnet {onu_ip}:{TELNET_PORT} ...", CYAN)
+    try:
+        tn = telnetlib.Telnet(onu_ip, TELNET_PORT, timeout=TIMEOUT)
+    except Exception as e:
+        log(f"VOIP: không kết nối được {onu_ip}: {e}", RED)
+        return {"lines": {}, "ok": False, "output": "", "error": str(e)}
+
+    try:
+        onu_login_enable(tn)
+
+        output = run_onu_cmd(tn, "show voice status")
+        result = parse_voip_status(output)
+        result["output"] = output
+
+        log(output.strip(), YELLOW)
+        if not result["lines"]:
+            log("VOIP: không parse được dòng 'Line N:' nào từ output trên", RED)
+        status = f"{GREEN}OK{RESET}" if result["ok"] else f"{RED}FAIL{RESET}"
+        log(f"VOIP registration: {status}", CYAN)
+        for line_number, line_status in result["lines"].items():
+            log(
+                f"Line {line_number}: Registration Status = "
+                f"{line_status['registration_status'] or 'Unknown'}",
+                GREEN if line_status["ok"] else RED,
+            )
+
+        return result
+    finally:
+        tn.close()
 
 
 def ping_znid_check(router_ip: str, hosts: list[str]) -> dict:
