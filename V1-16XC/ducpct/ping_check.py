@@ -125,6 +125,12 @@ def run_onu_cmd(tn, cmd, prompt="#", timeout=30, quiet=1.5):
 
 
 def parse_voip_status(output: str) -> dict:
+    """Parse output của lệnh `show voice status`.
+
+    Một thiết bị ONT/ONU có thể đồng thời là cùng một box vật lý. Đòi hỏi không phải
+    tất cả các ONT/ONU đều có voice; vì vậy việc parse chỉ đánh dấu là OK khi tất cả
+    các line đều ở trạng thái registered/up.
+    """
     lines = {}
     current_line = None
 
@@ -156,12 +162,17 @@ def parse_voip_status(output: str) -> dict:
     }
 
 
-def check_voip_status(onu_ip: str) -> dict:
-    log(f"Telnet {onu_ip}:{TELNET_PORT} ...", CYAN)
+def check_voip_status(device_ip: str) -> dict:
+    """Kiểm tra trạng thái voice của ONT/ONU trên thiết bị đã được telnet tới.
+
+    Tên hàm được giữ nguyên để tránh phá vỡ call site cũ, nhưng về mặt ý nghĩa thì
+    `device_ip` là IP hoặc host của thiết bị ONT/ONU/ZNID đang kiểm tra voice.
+    """
+    log(f"Telnet {device_ip}:{TELNET_PORT} ...", CYAN)
     try:
-        tn = telnetlib.Telnet(onu_ip, TELNET_PORT, timeout=TIMEOUT)
+        tn = telnetlib.Telnet(device_ip, TELNET_PORT, timeout=TIMEOUT)
     except Exception as e:
-        log(f"VOIP: không kết nối được {onu_ip}: {e}", RED)
+        log(f"VOIP: không kết nối được {device_ip}: {e}", RED)
         return {"lines": {}, "ok": False, "output": "", "error": str(e)}
 
     try:

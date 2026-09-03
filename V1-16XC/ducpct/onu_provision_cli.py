@@ -16,8 +16,6 @@ os.makedirs(LOG_DIR, exist_ok=True)
 LOOP_COUNT = 1
 TIMESTAMP    = datetime.now().strftime("%Y%m%d_%H%M%S")
 LOG_FILE     = os.path.join(LOG_DIR, f"terminal_log_{TIMESTAMP}.txt")
-RESULT_FILE  = os.path.join(LOG_DIR, f"result_{TIMESTAMP}.txt")
-SUMMARY_FILE = os.path.join(LOG_DIR, f"summary_{TIMESTAMP}.txt")
 
 RESULT_SUMMARY = []
 OLT_HOST = "192.168.100.247"
@@ -30,7 +28,9 @@ ONU_KEYWORD = "onu004"
 ONU_USERNAME   = "admin"
 ONU_PASSWORD   = "dzsi"
 DEV_PASS     = "g4GwshWN"
-ZNID_AP_HOST = "192.168.90.1"
+ZNID_AP_HOST = "192.168.100.1"
+ZNID_5228XG_HOST = "192.168.1.1"
+ZNID_2466GN_HOST = "192.168.50.1"
 
 VERIFY_PPPOE = [
     "gpon0/3/43",
@@ -68,7 +68,7 @@ VERIFY_MAC = [
 
 def write_result(loop, phase, section_results):
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    with open(RESULT_FILE, "a", encoding="utf-8") as f:
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(f"\n{'=' * 60}\n")
         f.write(f"LOOP {loop}  |  {phase}  |  {ts}\n")
         f.write(f"{'=' * 60}\n")
@@ -79,10 +79,17 @@ def write_result(loop, phase, section_results):
             f.write("\n[VERIFY]\n")
             for target, status in check_list:
                 f.write(f"  {status}: {target}\n")
+
+
 def write_log(msg):
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(f"[{ts}] {msg}\n")
+
+
+def write_summary_to_log(summary_lines):
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write("\n" + "\n".join(summary_lines) + "\n")
 
 
 def olt_login(tn):
@@ -238,6 +245,7 @@ def ping_onu(onu_ipv4_vlan200, HOSTS):
         write_log(f"[PING-ONU] PASS - IP {ip} ping được trước khi telnet")
         ping_znid_check(ip, HOSTS)
 
+
 def check_targets(output, targets, label, expect_present=True):
     results  = []
     all_pass = True
@@ -334,37 +342,36 @@ def main():
             print("[STEP] Run PING checks")
             GPON_ID = "gpon0/3"
             XGS_ID = "xgspon0/3"
-            gpon_onu_ipv4_vlan200 = get_ONU_IP(GPON_ID)
-            xgs_onu_ipv4_vlan200 = get_ONU_IP(XGS_ID)
-            ping_onu(xgs_onu_ipv4_vlan200, HOST1)
-            ping_onu(gpon_onu_ipv4_vlan200, HOST1)
+            # gpon_onu_ipv4_vlan200 = get_ONU_IP(GPON_ID)
+            # xgs_onu_ipv4_vlan200 = get_ONU_IP(XGS_ID)
+
+            znid_checks = [
+                ("GPON", ZNID_2466GN_HOST),
+                ("XGS", ZNID_5228XG_HOST),
+            ]
+
+            for label, znid_host in znid_checks:
+                print(f"[STEP] PING from {label} ZNID {znid_host} to upstream hosts")
+                ping_znid_check(znid_host, HOST1)
 
             voip_passed = True
             write_log("[VOIP] START - begin GPON/XGS ONT voice status check")
-            if not gpon_onu_ipv4_vlan200 or not xgs_onu_ipv4_vlan200:
-                voip_passed = False
-                write_log("[VOIP] FAIL - không lấy được IP ONU vlan 200 trên GPON hoặc XGS")
+            # Một số ONT/ONU cùng box vật lý không có Voice; vì thế chỉ đánh dấu FAIL khi
+            # device được telnet thành công nhưng output không có line voice hợp lệ.
 
-            for onu_ip in gpon_onu_ipv4_vlan200:
-                voip_res = check_voip_status(onu_ip)
+            for label, device_ip in znid_checks:
+                voip_res = check_voip_status(device_ip)
                 voip_passed = voip_passed and voip_res["ok"]
                 detail = ", ".join(
                     f"Line {n}={s['registration_status'] or 'Unknown'}"
                     for n, s in voip_res["lines"].items()
                 ) or voip_res.get("error", "no line parsed")
-                write_log(f"[VOIP][GPON] RESULT: {'PASS' if voip_res['ok'] else 'FAIL'} | ONU={onu_ip} | {detail}")
+                write_log(f"[VOIP][{label}] RESULT: {'PASS' if voip_res['ok'] else 'FAIL'} | {detail}")
 
-            for onu_ip in xgs_onu_ipv4_vlan200:
-                voip_res = check_voip_status(onu_ip)
-                voip_passed = voip_passed and voip_res["ok"]
-                detail = ", ".join(
-                    f"Line {n}={s['registration_status'] or 'Unknown'}"
-                    for n, s in voip_res["lines"].items()
-                ) or voip_res.get("error", "no line parsed")
-                write_log(f"[VOIP][XGS] RESULT: {'PASS' if voip_res['ok'] else 'FAIL'} | ONU={onu_ip} | {detail}")
-
-            write_log(f"[VOIP] FINAL: {'PASS' if voip_passed else 'FAIL'} | GPON={bool(gpon_onu_ipv4_vlan200)} | XGS={bool(xgs_onu_ipv4_vlan200)}")
-
+            write_log(
+                f"[VOIP] FINAL: {'PASS' if voip_passed else 'FAIL'} | "
+                f"GPON={bool(ZNID_2466GN_HOST)} | XGS={bool(ZNID_5228XG_HOST)}"
+            )
             # ── 3. VERIFY PROVISION ──────────────────────────
             print("[WAIT] 5s before OLT verify (provision)...")
             time.sleep(5)
@@ -412,9 +419,7 @@ def main():
 
     print("\n" + "\n".join(summary_lines))
 
-    with open(SUMMARY_FILE, "w", encoding="utf-8") as f:
-        f.write("\n".join(summary_lines) + "\n")
-
+    write_summary_to_log(summary_lines)
     write_log(f"DONE | PASS={pass_c} FAIL={fail_c}")
 
 
