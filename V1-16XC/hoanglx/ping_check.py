@@ -6,6 +6,15 @@ import re
 import sys
 from datetime import datetime
 
+# Console Windows mặc định là cp1252 -> print() chuỗi có dấu sẽ raise
+# UnicodeEncodeError và làm chết cả aging run. errors="replace" để log
+# xấu một chút cũng được, miễn không kill script.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 TELNET_PORT  = 23
 LOGIN_USER   = "admin"
 LOGIN_PASS   = "dzsi"
