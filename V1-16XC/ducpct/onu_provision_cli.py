@@ -2,63 +2,73 @@
 import telnetlib
 import time
 import re
+import os
+import subprocess
 
 from ping_check import *
 
 # ==================================================
 # OLT INFO
 # ==================================================
-LOOP_COUNT = 2
+LOG_DIR = "D:/aging_log"
+os.makedirs(LOG_DIR, exist_ok=True)
+
+LOOP_COUNT = 1
 TIMESTAMP    = datetime.now().strftime("%Y%m%d_%H%M%S")
-LOG_FILE     = f"terminal_log_{TIMESTAMP}.txt"
-RESULT_FILE  = f"result_{TIMESTAMP}.txt"
-SUMMARY_FILE = f"summary_{TIMESTAMP}.txt"
+LOG_FILE     = os.path.join(LOG_DIR, f"terminal_log_{TIMESTAMP}.txt")
 
 RESULT_SUMMARY = []
-OLT_HOST = "192.168.100.248"
+OLT_HOST = "192.168.100.247"
 OLT_PORT = 23
 OLT_USERNAME = "admin"
-OLT_PASSWORD = r"Zhone1234%^&"
+# OLT_PASSWORD = r"Zhone1234%^&"
+OLT_PASSWORD = r"DZSone23456!"
 
 ONU_KEYWORD = "onu004"
 ONU_USERNAME   = "admin"
 ONU_PASSWORD   = "dzsi"
 DEV_PASS     = "g4GwshWN"
-ZNID_AP_HOST = "192.168.90.1"
+ZNID_AP_HOST = "192.168.100.1"
+ZNID_5228XG_HOST = "192.168.1.1"
+ZNID_2466GN_HOST = "192.168.50.1"
 
 VERIFY_PPPOE = [
-    "xgspon0/3/43",
     "gpon0/3/43",
+    "xgspon0/3/43",
 ]
-
+ 
 VERIFY_IPV6_DHCP = [
-    "xgspon0/3/44",
     "gpon0/3/44",
-]
-
-VERIFY_IP_DHCP = [
-    "xgspon0/3/41",
-    "xgspon0/3/42",
     "xgspon0/3/44",
+]
+ 
+VERIFY_IP_DHCP = [
     "gpon0/3/41",
     "gpon0/3/42",
     "gpon0/3/44",
-]
-
-VERIFY_MAC = [
+    "gpon0/3/46",
     "xgspon0/3/41",
     "xgspon0/3/42",
-    "xgspon0/3/43",
     "xgspon0/3/44",
+    "xgspon0/3/46",
+]
+ 
+VERIFY_MAC = [
     "gpon0/3/41",
     "gpon0/3/42",
     "gpon0/3/43",
     "gpon0/3/44",
+    "gpon0/3/46",
+    "xgspon0/3/41",
+    "xgspon0/3/42",
+    "xgspon0/3/43",
+    "xgspon0/3/44",
+    "xgspon0/3/46",
 ]
 
 def write_result(loop, phase, section_results):
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    with open(RESULT_FILE, "a", encoding="utf-8") as f:
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(f"\n{'=' * 60}\n")
         f.write(f"LOOP {loop}  |  {phase}  |  {ts}\n")
         f.write(f"{'=' * 60}\n")
@@ -69,10 +79,17 @@ def write_result(loop, phase, section_results):
             f.write("\n[VERIFY]\n")
             for target, status in check_list:
                 f.write(f"  {status}: {target}\n")
+
+
 def write_log(msg):
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(f"[{ts}] {msg}\n")
+
+
+def write_summary_to_log(summary_lines):
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write("\n" + "\n".join(summary_lines) + "\n")
 
 
 def olt_login(tn):
@@ -140,15 +157,96 @@ def get_ONU_IP(PON_ID):
     print(f"IPv4 VLAN 200 for {PON_ID}: {onu_ipv4_vlan200}")
     return onu_ipv4_vlan200
  
+def ping_ip_reachable(ip: str, count: int = 2, timeout_ms: int = 2000) -> tuple[bool, str]:
+    cmd = ["ping", "-n", str(count), "-w", str(timeout_ms), ip]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        output = (result.stdout or "") + (result.stderr or "")
+        reachable = (
+            "reply from" in output.lower()
+            or "bytes=" in output.lower()
+            or "ttl=" in output.lower()
+        ) and "100% loss" not in output.lower()
+        return reachable, output.strip()
+    except Exception as exc:
+        return False, str(exc)
+
+
+def olt_reboot_ont(port: str, onu_id: str = "4"):
+    """Reboot chỉ ONT đang lỗi trên đúng cổng gpon/xgspon."""
+    try:
+        tn = telnetlib.Telnet(OLT_HOST, OLT_PORT, timeout=10)
+        olt_login(tn)
+        time.sleep(1)
+        send_olt_cmd(tn, "enable", 1)
+        time.sleep(1)
+        send_olt_cmd(tn, "configure terminal", 1)
+        time.sleep(1)
+        send_olt_cmd(tn, f"interface {port} 0/3", 1)
+        time.sleep(1)
+        send_olt_cmd(tn, f"onu reset {onu_id}", 1)
+        send_olt_cmd(tn, "y", 1)
+        send_olt_cmd(tn, "end", 1)
+        send_olt_cmd(tn, "write", 2)
+        write_log(f"[OLT-REBOOT] SUCCESS - reboot ONT {onu_id} trên {port} 0/3")
+        tn.close()
+    except Exception as exc:
+        write_log(f"[OLT-REBOOT] FAIL - reboot ONT {onu_id} trên {port} 0/3 | error={exc}")
+
+
+def olt_fallback_check(label: str, onu_ip: str = "") -> str:
+    """Fallback khi ONU VLAN 200 không reachable hoặc telnet VoIP thất bại.
+    Tự telnet lại vào OLT và chạy lệnh check liên quan.
+    """
+    try:
+        tn = telnetlib.Telnet(OLT_HOST, OLT_PORT, timeout=10)
+        olt_login(tn)
+        time.sleep(1)
+        send_olt_cmd(tn, "enable", 1)
+        time.sleep(1)
+        send_olt_cmd(tn, "terminal length 0", 1)
+        time.sleep(1)
+
+        commands = [
+            "show ip dhcp snooping binding vlan 200",
+            "show mac address-table",
+            "show pppoe session all",
+            "show onu status",
+        ]
+
+        output_chunks = []
+        for cmd in commands:
+            out = send_olt_cmd(tn, cmd, wait=3)
+            output_chunks.append(f"--- {cmd} ---\n{out}\n")
+
+        final_output = "\n".join(output_chunks)
+        write_log(f"[OLT-FALLBACK] {label} | ONU={onu_ip or 'N/A'}")
+        write_log(final_output[:2000])
+        return final_output
+    except Exception as exc:
+        write_log(f"[OLT-FALLBACK] FAIL | {label} | ONU={onu_ip or 'N/A'} | error={exc}")
+        return ""
+    finally:
+        try:
+            tn.close()
+        except Exception:
+            pass
+
+
 def ping_onu(onu_ipv4_vlan200, HOSTS):
     for ip in onu_ipv4_vlan200:
+        reachable, output = ping_ip_reachable(ip, count=10, timeout_ms=2000)
+        if not reachable:
+            write_log(f"[PING-ONU] FAIL - IP {ip} không ping được trước khi telnet. Output: {output[:300]}")
+            olt_fallback_check("ONU VLAN 200 unreachable before telnet", ip)
+            olt_reboot_ont("gpon", "4")
+            continue
+
+        write_log(f"[PING-ONU] PASS - IP {ip} ping được trước khi telnet")
         ping_znid_check(ip, HOSTS)
 
+
 def check_targets(output, targets, label, expect_present=True):
-    """
-    expect_present=True  → PASS nếu target TÌM THẤY   (dùng sau PROVISION)
-    expect_present=False → PASS nếu target KHÔNG TỒN TẠI (dùng sau REMOVE)
-    """
     results  = []
     all_pass = True
 
@@ -178,10 +276,13 @@ def verify_provision(loop):
     time.sleep(1)
     send_olt_cmd(tn, "terminal length 0", 1)
     time.sleep(1)
+    send_olt_cmd(tn, f"show onu firmware version gpon 0/3 4",wait=3)
+    send_olt_cmd(tn, f"show onu firmware version xgspon 0/3 4",wait=3)
     out_mac    = send_olt_cmd(tn, f"show mac address-table",wait=3)
     out_pppoe  = send_olt_cmd(tn, f"show pppoe session all",wait=3)
     out_ipv6   = send_olt_cmd(tn, f"show ipv6 dhcp snooping binding",wait=3)
     out_ipdhcp = send_olt_cmd(tn, f"show ip dhcp snooping binding ", wait=3)
+
     tn.close()
 
     print(f"\n[LOOP {loop}] === VERIFY PROVISION ===")
@@ -221,7 +322,7 @@ def main():
     print(f"Starting test | Loops: {LOOP_COUNT} | ONU: {ONU_KEYWORD}")
     write_log(f"START | LOOP_COUNT={LOOP_COUNT} | ONU={ONU_KEYWORD}")
 
-    for i in range(1, LOOP_COUNT + 1):
+    for i in range(1, LOOP_COUNT+1):
         print(f"\n{'=' * 55}")
         print(f"  LOOP {i} / {LOOP_COUNT}")
         print(f"{'=' * 55}")
@@ -235,21 +336,47 @@ def main():
             print("\n[STEP] Run PROVISION commands via CLI")
             OLT_CLI("ONU_Provision_cli.txt")
             print("[WAIT] before checking connectivity from ZNID to Uplink")
-            time.sleep(120)
+            time.sleep(180)
 
-            # ── 2. PING Check ────────────────────────────────────
+            # ── 2. Service Check ────────────────────────────────────
             print("[STEP] Run PING checks")
-            GPON_ID="gpon0/3"
-            XGS_ID="xgspon0/3"
-            gpon_onu_ipv4_vlan200 = get_ONU_IP(GPON_ID)
-            xgs_onu_ipv4_vlan200 = get_ONU_IP(XGS_ID)
-            ping_onu(gpon_onu_ipv4_vlan200, HOST2)
-            ping_onu(xgs_onu_ipv4_vlan200, HOST2)
+            GPON_ID = "gpon0/3"
+            XGS_ID = "xgspon0/3"
+            # gpon_onu_ipv4_vlan200 = get_ONU_IP(GPON_ID)
+            # xgs_onu_ipv4_vlan200 = get_ONU_IP(XGS_ID)
 
-            # ── 2. VERIFY PROVISION ──────────────────────────
+            znid_checks = [
+                ("GPON", ZNID_2466GN_HOST),
+                ("XGS", ZNID_5228XG_HOST),
+            ]
+
+            for label, znid_host in znid_checks:
+                print(f"[STEP] PING from {label} ZNID {znid_host} to upstream hosts")
+                ping_znid_check(znid_host, HOST1)
+
+            voip_passed = True
+            write_log("[VOIP] START - begin GPON/XGS ONT voice status check")
+            # Một số ONT/ONU cùng box vật lý không có Voice; vì thế chỉ đánh dấu FAIL khi
+            # device được telnet thành công nhưng output không có line voice hợp lệ.
+
+            for label, device_ip in znid_checks:
+                voip_res = check_voip_status(device_ip)
+                voip_passed = voip_passed and voip_res["ok"]
+                detail = ", ".join(
+                    f"Line {n}={s['registration_status'] or 'Unknown'}"
+                    for n, s in voip_res["lines"].items()
+                ) or voip_res.get("error", "no line parsed")
+                write_log(f"[VOIP][{label}] RESULT: {'PASS' if voip_res['ok'] else 'FAIL'} | {detail}")
+
+            write_log(
+                f"[VOIP] FINAL: {'PASS' if voip_passed else 'FAIL'} | "
+                f"GPON={bool(ZNID_2466GN_HOST)} | XGS={bool(ZNID_5228XG_HOST)}"
+            )
+            # ── 3. VERIFY PROVISION ──────────────────────────
             print("[WAIT] 5s before OLT verify (provision)...")
             time.sleep(5)
             passed1 = verify_provision(i)
+            passed1 = passed1 and voip_passed
             result = "PASS" if passed1 else "FAIL"
 
             print("[WAIT] 60s before next loop...")
@@ -292,9 +419,7 @@ def main():
 
     print("\n" + "\n".join(summary_lines))
 
-    with open(SUMMARY_FILE, "w", encoding="utf-8") as f:
-        f.write("\n".join(summary_lines) + "\n")
-
+    write_summary_to_log(summary_lines)
     write_log(f"DONE | PASS={pass_c} FAIL={fail_c}")
 
 
