@@ -15,6 +15,8 @@ import platform
 import threading
 import random
 import queue as _queue
+import re
+import socket
 
 try:
     from GPON_NSO_Generator import GPONConfigGenerator as _GPONConfigGenerator
@@ -173,10 +175,9 @@ def mac_to_bytes(mac_str):
 
 
 def increment_mac(base_mac: str, n: int) -> str:
-    """Return base_mac + n (wraps within 48-bit space, keeps locally-administered bit)."""
+    """Return base_mac + n (wraps within 48-bit space, keeps user-supplied OUI bits as-is)."""
     val = int.from_bytes(mac_to_bytes(base_mac), 'big')
     val = (val + n) & 0xFFFFFFFFFFFF
-    val |= 0x020000000000   # keep locally-administered bit
     return ':'.join(f'{b:02x}' for b in val.to_bytes(6, 'big'))
 
 
@@ -250,7 +251,12 @@ class DHCPClientEmulator:
         self._igmp_stats_sniffer= None
         self._igmp_pkt_counts   = {}   # group_ip → [count, bytes, last_bytes, bitrate]
         self._igmp_video_nb     = None
-        self.igmp_group_rows    = []   # list of (frame, ip_var, port_var)
+        self.igmp_group_rows    = []   # list of (frame, ip_var, port_var,
+                                       #          mode_var, src_var)
+        # IGMPv3 (RFC 3376) per-group source filter:
+        #   "group_ip:port" → {"mode": "include"|"exclude", "srcs": [ip, …]}
+        self._igmp_group_filters = {}
+        self._igmp_v3_widgets    = []  # widgets enabled only when IGMPv3 chosen
         # Packet capture state
         self._capture_sniffer  = None
         self._captured_packets = []
@@ -801,7 +807,8 @@ class DHCPClientEmulator:
                   style="Head.TLabel").pack(side="left", padx=(10, 6))
         for v, l in (("v2", "IGMPv2"), ("v3", "IGMPv3")):
             ttk.Radiobutton(_igmp_to_row, text=l,
-                            variable=self.igmp_version_var, value=v).pack(
+                            variable=self.igmp_version_var, value=v,
+                            command=self._igmp_on_version_change).pack(
                 side="left", padx=(0, 10))
 
         ttk.Label(_igmp_cfg, text="DHCP Retry:", style="Head.TLabel").grid(
@@ -824,6 +831,7 @@ class DHCPClientEmulator:
         self.igmp_groups_frame.grid(row=8, column=1, columnspan=2,
                                     sticky="w", pady=3)
         self._igmp_add_group_row()
+        self._igmp_on_version_change()   # grey out v3 source filter for IGMPv2
 
         ttk.Button(_igmp_cfg, text="+ Add Group", style="Action.TButton",
                    command=self._igmp_add_group_row).grid(
@@ -1155,10 +1163,14 @@ class DHCPClientEmulator:
     # ── IGMP group row management ─────────────────────────────────────────────
 
     def _igmp_add_group_row(self):
-        row_frm  = ttk.Frame(self.igmp_groups_frame)
-        row_frm.pack(anchor="w", pady=2)
+        outer = ttk.Frame(self.igmp_groups_frame)
+        outer.pack(anchor="w", pady=(2, 6))
+        row_frm  = ttk.Frame(outer)
+        row_frm.pack(anchor="w")
         ip_var   = tk.StringVar(value="237.0.0.10")
         port_var = tk.StringVar(value="5000")
+        mode_var = tk.StringVar(value=self.IGMP_MODE_LABELS["exclude"])
+        src_var  = tk.StringVar(value="")
         ttk.Label(row_frm, text="Group IP:", style="Head.TLabel").pack(
             side="left", padx=(0, 4))
         ttk.Entry(row_frm, textvariable=ip_var, width=14,
@@ -1170,9 +1182,11 @@ class DHCPClientEmulator:
         _cbg2 = self.C_BASE
         # ▶ Join — joins selected clients (or all if none selected)
         RoundedButton(row_frm, "▶ Join",
-                      command=lambda iv=ip_var, pv=port_var:
+                      command=lambda iv=ip_var, pv=port_var, mv=mode_var,
+                      sv=src_var:
                       self._igmp_join_single_group(iv.get().strip(),
-                                                   int(pv.get() or 1234)),
+                                                   int(pv.get() or 1234),
+                                                   mv.get(), sv.get()),
                       bg="#0288d1", canvas_bg=_cbg2,
                       font=("Segoe UI", 8, "bold"),
                       padx=8, pady=3).pack(side="left", padx=(8, 0))
@@ -1185,17 +1199,198 @@ class DHCPClientEmulator:
                       font=("Segoe UI", 8, "bold"),
                       padx=8, pady=3).pack(side="left", padx=(4, 0))
         ttk.Button(row_frm, text="−",
-                   command=lambda f=row_frm, iv=ip_var, pv=port_var:
+                   command=lambda f=outer, iv=ip_var, pv=port_var:
                    self._igmp_remove_group_row(f, iv, pv),
                    width=2).pack(side="left", padx=(4, 0))
-        self.igmp_group_rows.append((row_frm, ip_var, port_var))
+
+        # ── IGMPv3 (RFC 3376) source filter — INCLUDE / EXCLUDE ──────────────
+        v3_frm = ttk.Frame(outer)
+        v3_frm.pack(anchor="w", padx=(12, 0), pady=(2, 0))
+        lbl_mode = ttk.Label(v3_frm, text="IGMPv3 Filter:", style="Head.TLabel")
+        lbl_mode.pack(side="left", padx=(0, 4))
+        cb_mode = ttk.Combobox(v3_frm, textvariable=mode_var, width=20,
+                               state="readonly",
+                               values=[self.IGMP_MODE_LABELS["exclude"],
+                                       self.IGMP_MODE_LABELS["include"]])
+        cb_mode.pack(side="left")
+        lbl_src = ttk.Label(v3_frm, text="  Sources:", style="Head.TLabel")
+        lbl_src.pack(side="left", padx=(8, 4))
+        ent_src = ttk.Entry(v3_frm, textvariable=src_var, width=34,
+                            font=("Consolas", 9))
+        ent_src.pack(side="left")
+        lbl_hint = ttk.Label(
+            v3_frm,
+            text=" (cách nhau bởi dấu phẩy — EXCLUDE rỗng = mọi source)",
+            foreground=self.C_DIM)
+        lbl_hint.pack(side="left", padx=(4, 0))
+        # ALLOW_NEW_SOURCES / BLOCK_OLD_SOURCES — incremental source updates
+        btn_allow = ttk.Button(
+            v3_frm, text="Allow", width=6,
+            command=lambda iv=ip_var, pv=port_var, sv=src_var:
+            self._igmp_source_change(iv.get().strip(), int(pv.get() or 1234),
+                                     sv.get(), 5))
+        btn_allow.pack(side="left", padx=(8, 0))
+        btn_block = ttk.Button(
+            v3_frm, text="Block", width=6,
+            command=lambda iv=ip_var, pv=port_var, sv=src_var:
+            self._igmp_source_change(iv.get().strip(), int(pv.get() or 1234),
+                                     sv.get(), 6))
+        btn_block.pack(side="left", padx=(4, 0))
+
+        self._igmp_v3_widgets.extend(
+            [cb_mode, ent_src, btn_allow, btn_block])
+        self.igmp_group_rows.append((outer, ip_var, port_var,
+                                     mode_var, src_var))
+        self._igmp_on_version_change()
 
     def _igmp_remove_group_row(self, frm, ip_var, port_var):
         if len(self.igmp_group_rows) <= 1:
             return
-        self.igmp_group_rows = [(f, iv, pv) for f, iv, pv in self.igmp_group_rows
-                                if iv is not ip_var]
+        # Drop this row's v3 widgets from the enable/disable list
+        _prefix = str(frm) + "."
+        self._igmp_v3_widgets = [w for w in self._igmp_v3_widgets
+                                 if not str(w).startswith(_prefix)]
+        self.igmp_group_rows = [r for r in self.igmp_group_rows
+                                if r[1] is not ip_var]
         frm.destroy()
+
+    def _igmp_on_version_change(self):
+        """Enable the IGMPv3 source-filter widgets only for IGMPv3."""
+        v3 = self.igmp_version_var.get() == "v3"
+        for w in list(self._igmp_v3_widgets):
+            try:
+                if isinstance(w, ttk.Combobox):
+                    w.configure(state="readonly" if v3 else "disabled")
+                else:
+                    w.configure(state="normal" if v3 else "disabled")
+            except Exception:
+                self._igmp_v3_widgets.remove(w)
+
+    # ── IGMPv3 source-filter helpers (RFC 3376) ───────────────────────────────
+
+    IGMP_MODE_LABELS = {"exclude": "EXCLUDE (ASM)",
+                        "include": "INCLUDE (SSM)"}
+
+    @staticmethod
+    def _igmp_mode_key(label: str) -> str:
+        """Combobox label → "include" / "exclude"."""
+        return "include" if "INCLUDE" in (label or "").upper() else "exclude"
+
+    @staticmethod
+    def _igmp_parse_sources(src_str: str):
+        """Parse a comma/space separated source list → (sources, bad_entries)."""
+        srcs, bad = [], []
+        for tok in re.split(r"[,\s;]+", (src_str or "").strip()):
+            if not tok:
+                continue
+            try:
+                socket.inet_aton(tok)
+                if tok.count(".") != 3:
+                    raise ValueError
+                if tok not in srcs:
+                    srcs.append(tok)
+            except Exception:
+                bad.append(tok)
+        return srcs, bad
+
+    def _igmp_filter_of(self, group_key: str):
+        """Return (mode, sources) for a group key — defaults to EXCLUDE {}."""
+        f = self._igmp_group_filters.get(group_key) or {}
+        return f.get("mode", "exclude"), list(f.get("srcs", []))
+
+    def _igmp_filter_text(self, group_key: str) -> str:
+        """Short "[IN: a, b]" / "[EX: a]" suffix for the tree label."""
+        if self.igmp_version_var.get() != "v3":
+            return ""
+        mode, srcs = self._igmp_filter_of(group_key)
+        if not srcs:
+            return "" if mode == "exclude" else "  [IN: ∅]"
+        tag = "IN" if mode == "include" else "EX"
+        shown = ", ".join(srcs[:2]) + ("…" if len(srcs) > 2 else "")
+        return f"  [{tag}: {shown}]"
+
+    def _igmp_v3_report(self, mac, ip, vlan_id, pcp, rtype, group_ip, srcs):
+        """Build an IGMPv3 Membership Report (one group record, RFC 3376)."""
+        from scapy.contrib.igmpv3 import IGMPv3, IGMPv3mr, IGMPv3gr
+        from scapy.layers.inet import IPOption_Router_Alert
+        gr = IGMPv3gr(rtype=rtype, maddr=group_ip, srcaddrs=list(srcs or []))
+        return (build_eth(mac, "01:00:5e:00:00:16", vlan_id, pcp) /
+                IP(src=ip, dst="224.0.0.22", ttl=1,
+                   options=IPOption_Router_Alert()) /
+                IGMPv3(type=0x22) /
+                IGMPv3mr(records=[gr]))
+
+    # Record types used below (RFC 3376 §4.2.12)
+    _IGMP_RT_NAME = {1: "IS_IN", 2: "IS_EX", 3: "TO_IN", 4: "TO_EX",
+                     5: "ALLOW", 6: "BLOCK"}
+
+    def _igmp_source_change(self, group_ip: str, port: int,
+                            src_str: str, rtype: int):
+        """Send ALLOW_NEW_SOURCES (5) / BLOCK_OLD_SOURCES (6) for a group."""
+        if self.igmp_version_var.get() != "v3":
+            messagebox.showinfo("IGMP", "Chỉ IGMPv3 hỗ trợ Allow/Block source.")
+            return
+        if not self._igmp_leases:
+            messagebox.showinfo("IGMP", "Không có client active.")
+            return
+        srcs, bad = self._igmp_parse_sources(src_str)
+        if bad:
+            messagebox.showerror("IGMP", f"Source IP không hợp lệ: {', '.join(bad)}")
+            return
+        if not srcs:
+            messagebox.showerror("IGMP",
+                                 "Allow/Block cần ít nhất một source IP.")
+            return
+        key   = f"{group_ip}:{port}"
+        rname = self._IGMP_RT_NAME.get(rtype, str(rtype))
+
+        # Keep the stored filter in sync with the incremental change
+        mode, cur = self._igmp_filter_of(key)
+        if mode == "include":
+            new = ([s for s in cur if s not in srcs] if rtype == 6
+                   else cur + [s for s in srcs if s not in cur])
+        else:
+            new = (cur + [s for s in srcs if s not in cur] if rtype == 6
+                   else [s for s in cur if s not in srcs])
+        self._igmp_group_filters[key] = {"mode": mode, "srcs": new}
+
+        for idx in self._igmp_target_clients():
+            lease = self._igmp_leases.get(idx)
+            if not lease:
+                continue
+            threading.Thread(
+                target=self._igmp_send_record,
+                args=(idx, lease, group_ip, rtype, srcs, key, rname),
+                daemon=True).start()
+
+    def _igmp_send_record(self, client_idx, lease, group_ip, rtype,
+                          srcs, group_key, rname):
+        """Send a single IGMPv3 group record for one client."""
+        try:
+            pkt = self._igmp_v3_report(lease["mac"], lease["ip"],
+                                       lease.get("vlan_id"),
+                                       lease.get("pcp", 0),
+                                       rtype, group_ip, srcs)
+            sendp(pkt, iface=lease["iface"], verbose=False)
+            self._log(f"  >>> IGMPv3 {rname} {group_key} "
+                      f"src=[{', '.join(srcs) or '∅'}] "
+                      f"(C{client_idx+1:02d})\n", "send", target="igmp")
+        except Exception as e:
+            self._log(f"  [ERROR] IGMPv3 {rname}: {e}\n", "err", target="igmp")
+
+    def _igmp_target_clients(self):
+        """Clients selected in the tree, or all active clients if none."""
+        sel = self.igmp_tree.selection()
+        iid_to_idx = {v: k for k, v in self._igmp_client_rows.items()}
+        if not sel:
+            return set(self._igmp_leases.keys())
+        targets = set()
+        for iid in sel:
+            parent = self.igmp_tree.parent(iid)
+            idx = iid_to_idx.get(iid if parent == "" else parent)
+            if idx is not None:
+                targets.add(idx)
+        return targets
 
     # ── IGMP table helpers ────────────────────────────────────────────────────
 
@@ -1213,7 +1408,21 @@ class DHCPClientEmulator:
         """Add child (group) row under a client parent row."""
         key = (client_idx, group_key)
         if key in self._igmp_group_rows_dict:
-            return   # already exists
+            # Already there — only refresh the label (source filter may
+            # have changed since the first join)
+            def _relabel():
+                iid = self._igmp_group_rows_dict.get(key)
+                if not iid:
+                    return
+                try:
+                    vals = list(self.igmp_tree.item(iid, "values"))
+                    vals[0] = group_key + self._igmp_filter_text(group_key)
+                    self.igmp_tree.item(iid, values=vals)
+                except Exception:
+                    self._igmp_group_rows_dict.pop(key, None)
+
+            self.root.after(0, _relabel)
+            return
         parent_iid = self._igmp_client_rows.get(client_idx)
         if not parent_iid:
             return
@@ -1221,7 +1430,8 @@ class DHCPClientEmulator:
         def _do():
             iid = self.igmp_tree.insert(
                 parent_iid, "end", text="", tags=("running",),
-                values=(group_key, "", "Joining…", "0", "0", "-")
+                values=(group_key + self._igmp_filter_text(group_key),
+                        "", "Joining…", "0", "0", "-")
             )
             self._igmp_group_rows_dict[key] = iid
 
@@ -1340,6 +1550,28 @@ class DHCPClientEmulator:
         if not group_list:
             messagebox.showerror("Error", "Nhập ít nhất một multicast group.")
             return
+
+        # ── IGMPv3 source filters (RFC 3376) from the group rows ─────────────
+        self._igmp_group_filters.clear()
+        for r in self.igmp_group_rows:
+            g_ip = r[1].get().strip()
+            if not g_ip:
+                continue
+            key       = f"{g_ip}:{int(r[2].get() or 1234)}"
+            f_mode    = self._igmp_mode_key(r[3].get())
+            srcs, bad = self._igmp_parse_sources(r[4].get())
+            if igmp_ver == "v3":
+                if bad:
+                    messagebox.showerror(
+                        "Error", f"{key}: source IP không hợp lệ: "
+                                 f"{', '.join(bad)}")
+                    return
+                if f_mode == "include" and not srcs:
+                    messagebox.showerror(
+                        "Error", f"{key}: INCLUDE mode cần ít nhất một "
+                                 f"source IP (RFC 3376).")
+                    return
+            self._igmp_group_filters[key] = {"mode": f_mode, "srcs": srcs}
 
         macs = [increment_mac(mac, i) if mac_mode == "sequential"
                 else random_mac() for i in range(num_clients)]
@@ -1493,14 +1725,9 @@ class DHCPClientEmulator:
                       options=IPOption_Router_Alert()) /
                    IGMP(type=0x17, gaddr=group_ip))
         else:
-            from scapy.contrib.igmpv3 import IGMPv3, IGMPv3mr, IGMPv3gr
-            eth2 = build_eth(mac, "01:00:5e:00:00:16", vlan_id, pcp)
-            pkt  = (eth2 /
-                    IP(src=ip, dst="224.0.0.22", ttl=1,
-                       options=IPOption_Router_Alert()) /
-                    IGMPv3(type=0x22) /
-                    IGMPv3mr(numgrp=1) /
-                    IGMPv3gr(rtype=3, maddr=group_ip))
+            # Full leave = CHANGE_TO_INCLUDE_MODE with an empty source list
+            pkt = self._igmp_v3_report(mac, ip, vlan_id, pcp,
+                                       3, group_ip, [])
         try:
             sendp(pkt, iface=iface, verbose=False)
             self._log(f"  >>> IGMP Leave {group_ip}:{port} (C{client_idx+1:02d})\n",
@@ -1536,14 +1763,9 @@ class DHCPClientEmulator:
                           options=IPOption_Router_Alert()) /
                        IGMP(type=0x17, gaddr=group_ip))
             else:
-                from scapy.contrib.igmpv3 import IGMPv3, IGMPv3mr, IGMPv3gr
-                eth2 = build_eth(mac, "01:00:5e:00:00:16", vlan_id, pcp)
-                pkt  = (eth2 /
-                        IP(src=ip, dst="224.0.0.22", ttl=1,
-                           options=IPOption_Router_Alert()) /
-                        IGMPv3(type=0x22) /
-                        IGMPv3mr(numgrp=1) /
-                        IGMPv3gr(rtype=3, maddr=group_ip))
+                # Full leave = CHANGE_TO_INCLUDE_MODE with an empty source list
+                pkt = self._igmp_v3_report(mac, ip, vlan_id, pcp,
+                                           3, group_ip, [])
             try:
                 sendp(pkt, iface=iface, verbose=False)
                 self._log(f"  >>> IGMP Leave {group_ip} (C{client_idx+1:02d})\n",
@@ -1557,8 +1779,13 @@ class DHCPClientEmulator:
 
     # ── IGMP Join single group for existing clients ───────────────────────────
 
-    def _igmp_join_single_group(self, group_ip: str, port: int):
-        """Join group for selected clients (or all if none selected)."""
+    def _igmp_join_single_group(self, group_ip: str, port: int,
+                                 mode_label: str = None, src_str: str = None):
+        """Join group for selected clients (or all if none selected).
+
+        For IGMPv3 the join carries the group's source filter (RFC 3376):
+        INCLUDE → CHANGE_TO_INCLUDE_MODE with the listed sources,
+        EXCLUDE → CHANGE_TO_EXCLUDE_MODE (empty list = any source / ASM)."""
         if not self._igmp_leases:
             messagebox.showinfo("IGMP",
                                 "Không có client active. Nhấn ▶ Start trước.")
@@ -1567,18 +1794,23 @@ class DHCPClientEmulator:
         key      = f"{group_ip}:{port}"
         igmp_ver = self.igmp_version_var.get()
 
-        # Determine target clients
-        sel = self.igmp_tree.selection()
-        iid_to_idx = {v: k for k, v in self._igmp_client_rows.items()}
-        if sel:
-            targets = set()
-            for iid in sel:
-                parent = self.igmp_tree.parent(iid)
-                idx = iid_to_idx.get(iid if parent == "" else parent)
-                if idx is not None:
-                    targets.add(idx)
-        else:
-            targets = set(self._igmp_leases.keys())
+        # Refresh this group's source filter from its row widgets
+        if mode_label is not None or src_str is not None:
+            f_mode    = self._igmp_mode_key(mode_label)
+            srcs, bad = self._igmp_parse_sources(src_str)
+            if igmp_ver == "v3":
+                if bad:
+                    messagebox.showerror(
+                        "IGMP", f"Source IP không hợp lệ: {', '.join(bad)}")
+                    return
+                if f_mode == "include" and not srcs:
+                    messagebox.showerror(
+                        "IGMP", "INCLUDE mode cần ít nhất một source IP "
+                                "(RFC 3376) — INCLUDE {} nghĩa là Leave.")
+                    return
+            self._igmp_group_filters[key] = {"mode": f_mode, "srcs": srcs}
+
+        targets = self._igmp_target_clients()
 
         if not targets:
             messagebox.showinfo("IGMP", "Chọn client trong bảng hoặc đảm bảo có client active.")
@@ -1596,9 +1828,16 @@ class DHCPClientEmulator:
             if not lease:
                 continue
             if (group_ip, port) in lease.get("groups", []):
-                self._log(f"  C{client_idx+1:02d} already joined {key}\n", "detail", target="igmp")
-                continue
-            lease["groups"].append((group_ip, port))
+                if igmp_ver != "v3":
+                    self._log(f"  C{client_idx+1:02d} already joined {key}\n",
+                              "detail", target="igmp")
+                    continue
+                # IGMPv3: re-send the state-change record so a changed
+                # INCLUDE/EXCLUDE source list reaches the querier
+                self._log(f"  C{client_idx+1:02d} {key} already joined — "
+                          f"sending filter update\n", "detail", target="igmp")
+            else:
+                lease["groups"].append((group_ip, port))
             self._igmp_table_add_group_row(client_idx, key)
             threading.Thread(
                 target=self._igmp_send_join_one,
@@ -1620,22 +1859,24 @@ class DHCPClientEmulator:
         parts_g  = [int(x) for x in group_ip.split('.')]
         mcast_mac = (f"01:00:5e:{parts_g[1] & 0x7f:02x}"
                      f":{parts_g[2]:02x}:{parts_g[3]:02x}")
+        f_desc = ""
         if igmp_ver == "v2":
             pkt = (build_eth(mac, mcast_mac, vlan_id, pcp) /
                    IP(src=ip, dst=group_ip, ttl=1,
                       options=IPOption_Router_Alert()) /
                    IGMP(type=0x16, gaddr=group_ip))
         else:
-            from scapy.contrib.igmpv3 import IGMPv3, IGMPv3mr, IGMPv3gr
-            pkt = (build_eth(mac, "01:00:5e:00:00:16", vlan_id, pcp) /
-                   IP(src=ip, dst="224.0.0.22", ttl=1,
-                      options=IPOption_Router_Alert()) /
-                   IGMPv3(type=0x22) /
-                   IGMPv3mr(numgrp=1) /
-                   IGMPv3gr(rtype=4, maddr=group_ip))
+            # RFC 3376 §4.2.12: TO_IN (3) for INCLUDE, TO_EX (4) for EXCLUDE
+            f_mode, srcs = self._igmp_filter_of(group_key)
+            rtype  = 3 if f_mode == "include" else 4
+            pkt    = self._igmp_v3_report(mac, ip, vlan_id, pcp,
+                                          rtype, group_ip, srcs)
+            f_desc = (f" {self._IGMP_RT_NAME[rtype]} "
+                      f"src=[{', '.join(srcs) or '∅'}]")
         try:
             sendp(pkt, iface=iface, verbose=False)
-            self._log(f"  >>> {igmp_ver} Join {group_key} (C{client_idx+1:02d})\n",
+            self._log(f"  >>> {igmp_ver} Join {group_key}{f_desc} "
+                      f"(C{client_idx+1:02d})\n",
                       "send", target="igmp")
             self._igmp_group_row_update(client_idx, group_key, status="Watching")
             # Open video tab only AFTER join is sent — first client for this group
@@ -1762,7 +2003,7 @@ class DHCPClientEmulator:
 
         pfx = f"[C{client_idx+1:02d}] "
 
-        def _send_report(group_ip):
+        def _send_report(group_ip, port=None):
             parts_g   = [int(x) for x in group_ip.split('.')]
             mcast_mac = (f"01:00:5e:{parts_g[1] & 0x7f:02x}"
                          f":{parts_g[2]:02x}:{parts_g[3]:02x}")
@@ -1772,13 +2013,12 @@ class DHCPClientEmulator:
                           options=IPOption_Router_Alert()) /
                        IGMP(type=0x16, gaddr=group_ip))
             else:
-                from scapy.contrib.igmpv3 import IGMPv3, IGMPv3mr, IGMPv3gr
-                pkt = (build_eth(mac, "01:00:5e:00:00:16", vlan_id, pcp) /
-                       IP(src=ip, dst="224.0.0.22", ttl=1,
-                          options=IPOption_Router_Alert()) /
-                       IGMPv3(type=0x22) /
-                       IGMPv3mr(numgrp=1) /
-                       IGMPv3gr(rtype=4, maddr=group_ip))
+                # Current-state record — RFC 3376 §4.2.12:
+                # MODE_IS_INCLUDE (1) / MODE_IS_EXCLUDE (2) with the sources
+                f_mode, srcs = self._igmp_filter_of(f"{group_ip}:{port}")
+                rtype = 1 if f_mode == "include" else 2
+                pkt   = self._igmp_v3_report(mac, ip, vlan_id, pcp,
+                                             rtype, group_ip, srcs)
             try:
                 sendp(pkt, iface=iface, verbose=False)
             except Exception:
@@ -1812,8 +2052,8 @@ class DHCPClientEmulator:
 
             if not sniffer_q.results:
                 # 130 s no query → unsolicited keep-alive
-                for g_ip, _ in live:
-                    _send_report(g_ip)
+                for g_ip, g_port in live:
+                    _send_report(g_ip, g_port)
                 self._log(f"{pfx}↔ Keep-alive report for "
                           f"{len(live)} group(s)\n", "detail", target="igmp")
                 continue
@@ -1831,17 +2071,18 @@ class DHCPClientEmulator:
 
             live = self._igmp_leases.get(client_idx, {}).get("groups", [])
             if q_group == "0.0.0.0":
-                to_report = [g for g, _ in live]
+                to_report = list(live)
                 q_type    = "General"
             else:
-                to_report = [g for g, _ in live if g == q_group]
+                to_report = [(g, p) for g, p in live if g == q_group]
                 q_type    = f"Group-Specific ({q_group})"
 
-            for g_ip in to_report:
-                _send_report(g_ip)
+            for g_ip, g_port in to_report:
+                _send_report(g_ip, g_port)
             if to_report:
                 self._log(f"{pfx}↔ {q_type} Query → Report: "
-                          f"{', '.join(to_report)}\n", "detail", target="igmp")
+                          f"{', '.join(g for g, _ in to_report)}\n",
+                          "detail", target="igmp")
 
     # ── IGMP Leave per group (called from Leave button in group row) ───────────
 
