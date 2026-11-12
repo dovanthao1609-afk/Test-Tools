@@ -175,7 +175,7 @@ def mac_to_bytes(mac_str):
 
 
 def increment_mac(base_mac: str, n: int) -> str:
-    """Return base_mac + n (wraps within 48-bit space, keeps user-supplied OUI bits as-is)."""
+    """Return base_mac + n (wraps within 48-bit space, keeps locally-administered bit)."""
     val = int.from_bytes(mac_to_bytes(base_mac), 'big')
     val = (val + n) & 0xFFFFFFFFFFFF
     return ':'.join(f'{b:02x}' for b in val.to_bytes(6, 'big'))

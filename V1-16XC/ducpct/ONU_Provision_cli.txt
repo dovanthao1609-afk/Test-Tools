@@ -1,51 +1,31 @@
 enable
 configure terminal
 interface gpon 0/3
-no onu 4
-onu add 4 ZNTS051c6872 auto-learning
-onu-profile 4 VEIP_test
-olt vp 41 vlan-flow 200 c-vid 200 mapping-onu 4 gemport 1/1
-olt vp 42 vlan-flow 2211 c-vid 2211 mapping-onu 4 gemport 2/1
-olt vp 43 vlan-flow 35 c-vid 35 mapping-onu 4 gemport 3/1
-olt vp 44 vlan-flow 1234 c-vid 1234 mapping-onu 4 gemport 4/1
-olt vp 45 vlan-flow 1237 c-vid 1237 mapping-onu 4 gemport 5/1
-olt vp 46 vlan-flow 30 c-vid 30 mapping-onu 4 gemport 6/1
-onu voip-sip 4 phone-number pots 1 2001
-onu voip-sip 4 auth pots 1 user 2001 password 2001
-onu voip-sip 4 phone-number pots 2 2002
-onu voip-sip 4 auth pots 2 user 2002 password 2002
+no onu 2
+onu add 2 ZNTS051c6872 auto-learning
+onu-profile 2 VEIP
+olt vp 21 vlan-flow 40 c-vid 40 mapping-onu 2 gemport 1/1
+olt vp 22 vlan-flow 200 c-vid 200 mapping-onu 2 gemport 2/1
+olt vp 23 vlan-flow 2021 c-vid 2021 mapping-onu 2 gemport 3/1
+olt vp 24 vlan-flow 2022 c-vid 2022 mapping-onu 2 gemport 4/1
+olt vp 25 vlan-flow 2211 c-vid 2211 mapping-onu 2 gemport 5/1
 exit
-ip l2-dhcpv4-relay sub-if gpon0/3/46 profile TEST
-ipv6 l2-dhcpv6-ldra sub-if gpon0/3/44 profile TEST
 pppoe intermediate-agent
- tag-opr-id 1 type 0x0105 sub-if gpon0/3/43 action add format TEST
- exit
+no tag-opr-id 1
+tag-opr-id 1 type 0x0105 sub-if gpon0/3/23 action add format TEST
+exit
 interface xgspon 0/3
-no onu 4
-onu add 4 ZNTS05160dac auto-learning
-onu-profile 4 VEIP_test
-olt vp 41 vlan-flow 200 c-vid 200 mapping-onu 4 gemport 1/1
-olt vp 42 vlan-flow 2211 c-vid 2211 mapping-onu 4 gemport 2/1
-olt vp 43 vlan-flow 35 c-vid 35 mapping-onu 4 gemport 3/1
-olt vp 44 vlan-flow 1234 c-vid 1234 mapping-onu 4 gemport 4/1
-olt vp 45 vlan-flow 1237 c-vid 1237 mapping-onu 4 gemport 5/1
-olt vp 46 vlan-flow 30 c-vid 30 mapping-onu 4 gemport 6/1
-onu voip-sip 4 phone-number pots 1 2003
-onu voip-sip 4 auth pots 1 user 2003 password 2003
-onu voip-sip 4 phone-number pots 2 2004
-onu voip-sip 4 auth pots 2 user 2004 password 2004
+no onu 2
+onu add 2 ZNTS051d273f auto-learning
+onu-profile 2 VEIP
+olt vp 21 vlan-flow 40 c-vid 40 mapping-onu 2 gemport 1/1
+olt vp 22 vlan-flow 200 c-vid 200 mapping-onu 2 gemport 2/1
+olt vp 23 vlan-flow 2021 c-vid 2021 mapping-onu 2 gemport 3/1
+olt vp 24 vlan-flow 2022 c-vid 2022 mapping-onu 2 gemport 4/1
+olt vp 25 vlan-flow 2211 c-vid 2211 mapping-onu 2 gemport 5/1
 exit
-ipv6 l2-dhcpv6-ldra sub-if xgspon0/3/44 profile TEST
-ip l2-dhcpv4-relay sub-if xgspon0/3/46 profile TEST
 pppoe intermediate-agent
- tag-opr-id 1 type 0x0105 sub-if xgspon0/3/43 action add format TEST
- tag-opr-id 1 type 0x0105 sub-if gpon0/3/43 action add format TEST
- exit 
- interface gpon 0/3
- onu reset 4
- y
- interface xgspon 0/3
- onu reset 4
- y
- end
+no tag-opr-id 2
+tag-opr-id 2 type 0x0105 sub-if xgspon0/3/23 action add format TEST
+end
 write
